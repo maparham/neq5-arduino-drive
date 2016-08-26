@@ -10,12 +10,6 @@
 #include "Wire.h"
 #include "AccelStepper.h"
 
-#include "../src/MPU6050_DMP6.h"
-
-#define L LOW
-#define H  HIGH
-#define LEFT -1
-#define RIGHT 1
 struct mount_state_t {
 	bool RA_isLeft = 0;bool DEC_isLeft = 0;
 	float RA_speed = 0;
@@ -25,19 +19,6 @@ struct mount_state_t {
 	;
 };
 
-size_t println(const String &s);
-size_t println(double num, int digits);
-size_t println(float num, int digits);
-//size_t println(long num);
-size_t println(float num);
-//size_t print(long num);
-size_t print(float num);
-size_t print(double n, int digits);
-size_t print(const String &s);
-size_t println(const char c[]);
-size_t print(const char c[]);
-
-void printGravity(triple_t gravity);
 void setup();
 void loop();
 

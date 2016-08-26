@@ -1,11 +1,9 @@
-#include "../src/MPU6050_DMP6.h"
-
 #include <Arduino.h>
 #include "I2Cdev.h"
-
 #include "MPU6050_6Axis_MotionApps20.h"
+#include "MPU6050_DMP6.h"
+#include "helpers.h"
 
-#include "../src/main.h"
 //#include "MPU6050.h" // not necessary if using MotionApps include file
 
 // Arduino Wire library is required if I2Cdev I2CDEV_ARDUINO_WIRE implementation
@@ -60,7 +58,7 @@ MPU6050 mpu;
 // uncomment "OUTPUT_READABLE_REALACCEL" if you want to see acceleration
 // components with gravity removed. This acceleration reference frame is
 // not compensated for orientation, so +X is always +X according to the
-// sensor, just without the effects of gravity. If you want acceleration
+// sensor, just without the effects of gravity. If you want accelnoeration
 // compensated for orientation, us OUTPUT_READABLE_WORLDACCEL instead.
 //#define OUTPUT_READABLE_REALACCEL
 
@@ -139,6 +137,25 @@ void getGravity(triple_t* gr) {
 	gr->y = gravity.y;
 	gr->z = gravity.z;
 }
+
+// wait for MPU non-blocking, and normalize the waiting time (optional)
+void setCurrentGravity(triple_t* mytriple, bool normalizeDelay) {
+	int n = normalizeDelay ? 300 : 32767;
+	while (!loopMPU(false) && n > 0) {
+		loop();
+		n--;
+	}
+	printGravity(*mytriple);
+	getGravity(mytriple);
+	while (n-- > 0 && normalizeDelay) {
+		loop();
+	}
+}
+
+void setCurrentGravity(triple_t* mytriple) {
+	setCurrentGravity(mytriple, false);
+}
+
 // ================================================================
 // ===                      INITIAL SETUP                       ===
 // ================================================================
@@ -288,11 +305,11 @@ bool loopMPU(bool verbose) {
 		mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
 		if (verbose) {
 			print("\nypr\t");
-			print((float)ypr[0] * 180 / M_PI);
+			print((float) ypr[0] * 180 / M_PI);
 			print("\t");
 			print(ypr[1] * 180 / M_PI);
 			print("\t");
-			println((float)ypr[2] * 180 / M_PI);
+			println((float) ypr[2] * 180 / M_PI);
 
 			print("θz,θx\t");
 			print(acos(gravity.z) * 180 / PI, 6);

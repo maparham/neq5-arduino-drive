@@ -1,6 +1,5 @@
 #include "Arduino.h"
-
-#include "../src/main.h"
+#include "MPU6050_DMP6.h"
 
 size_t println(const String &s) {
 	Serial.println(s);
@@ -15,11 +14,11 @@ size_t println(float num, int digits) {
 	return Serial1.println(num, digits);
 }
 /*
-size_t println(long num) {
-	Serial.println(num);
-	return Serial1.println(num);
-}
-*/
+ size_t println(long num) {
+ Serial.println(num);
+ return Serial1.println(num);
+ }
+ */
 
 size_t println(float num) {
 	Serial.println(num);
@@ -27,11 +26,11 @@ size_t println(float num) {
 }
 
 /*
-size_t print(long num) {
-	Serial.print(num);
-	return Serial1.print(num);
-}
-*/
+ size_t print(long num) {
+ Serial.print(num);
+ return Serial1.print(num);
+ }
+ */
 size_t print(float num) {
 	Serial.print(num);
 	return Serial1.print(num);
@@ -60,6 +59,4 @@ void printGravity(triple_t gravity) {
 	print(gravity.y, 6);
 	print("\t");
 	println(gravity.z, 6);
-	println(gravity.z, 6);
 }
-

@@ -1,6 +1,6 @@
-#include "../src/main.h"
-
-#include "../src/MPU6050_DMP6.h"
+#include "main.h"
+#include "MPU6050_DMP6.h"
+#include "helpers.h"
 
 char junk;
 String inputString = "";
@@ -19,6 +19,9 @@ static int uart_putchar(char c, FILE *stream) {
 	Serial1.write(c);
 	return 0;
 }
+
+triple_t current_g;
+
 int dir[2], stepModes[6] = { 1, 2, 4, 8, 16, 32 }, sm = 0, decelerating[2];
 long sps[2];
 const int ENABLE1 = 23, M10 = 25, M11 = 27, M12 = 29, RESET1 = 31, SLEEP1 = 33, STEP1 = 35, DIR1 =
@@ -36,7 +39,6 @@ AccelStepper* steppers[2];
 unsigned i = 0;
 long loopDuration, maxSPS; // maximum steps per second, i.e max loops per second
 
-triple_t current_g;
 mount_state_t current_mstate;
 
 unsigned setMicrostep(unsigned microsteps, unsigned i) {
@@ -215,12 +217,12 @@ void calcDirections(triple_t* target) {
 			|| (mstate.RA_isLeft && !mstate.DEC_isLeft && current_g.x < 0);
 
 	float currentX = current_g.x * (RA_sameTilt ? 1 : -1); // g.x, after RA transition
-			/*
-			 printf(
-			 "DEC_willBeLeft=%d RA_willBeLeft=%d DEC_sameTilt=%d RA_sameTilt=%d headingBackRight=%d headingBackLeft=%d headingBackward=%d currentXY=",
-			 DEC_willBeLeft, RA_willBeLeft, DEC_sameTilt, RA_sameTilt, headingBackRight,
-			 headingBackLeft, headingBackward);
-			 */
+	/*
+	 printf(
+	 "DEC_willBeLeft=%d RA_willBeLeft=%d DEC_sameTilt=%d RA_sameTilt=%d headingBackRight=%d headingBackLeft=%d headingBackward=%d currentXY=",
+	 DEC_willBeLeft, RA_willBeLeft, DEC_sameTilt, RA_sameTilt, headingBackRight,
+	 headingBackLeft, headingBackward);
+	 */
 	println(currentX, 6);
 	println(current_g.y, 6);
 
@@ -253,12 +255,12 @@ bool moveToTarget(triple_t* gravity, triple_t* target) {
 		xCounter = min(ERROR_LIMIT, xCounter + 1);
 	}
 
-/*
-	printf("%d ", xCounter);
-	print(gravity->x, 6);
-	print("  ");
-	print(deltaX - lastDeltaX, 4);
-*/
+	/*
+	 printf("%d ", xCounter);
+	 print(gravity->x, 6);
+	 print("  ");
+	 print(deltaX - lastDeltaX, 4);
+	 */
 	lastDeltaX = deltaX;
 
 	if (deltaX < X_ERROR) {
@@ -299,12 +301,12 @@ bool moveToTarget(triple_t* gravity, triple_t* target) {
 		zCounter = min(ERROR_LIMIT, zCounter + 1);
 	}
 
-/*
+	/*
 	 printf("	%d ", zCounter);
 	 print(gravity->z, 6);
 	 print("  ");
 	 println(deltaZ - lastDeltaZ, 4);
-*/
+	 */
 	lastDeltaZ = deltaZ;
 
 	if (deltaZ < Z_ERROR) {
@@ -369,10 +371,7 @@ void evaluate_RA(triple_t* g1, mount_state_t* mstate) {
 		while (stepper1.run()) {
 			loop();
 		}
-		while (!loopMPU(false)) {
-			loop();
-		}
-		getGravity(&g2);
+		setCurrentGravity(&g2);
 		update_RA_state(g1, &g2, mstate, direction);
 		mstate->RA_speed = min(mstate->RA_speed, abs(acos(g2.z)-acos(g1->z)) / TEST_STEPS * 2);
 		g1->x = g2.x;
@@ -400,13 +399,7 @@ void evaluate_DEC(triple_t* g1, mount_state_t* mstate) {
 	for (int i = 0; i < 2; i++) {
 		direction = (i % 2 ? CW : CCW);
 		stepper2.move(direction * TEST_STEPS / 2);
-		while (stepper2.run()) {
-			loop();
-		}
-		while (!loopMPU(false)) {
-			loop();
-		}
-		getGravity(&g2);
+		setCurrentGravity(&g2);
 		update_DEC_state(g1, &g2, mstate, direction);
 		mstate->DEC_speed = min(mstate->DEC_speed,
 				abs(atan(g2.x/g2.y)-atan(g1->x/g1->y)) / TEST_STEPS * 2);
@@ -430,25 +423,33 @@ void evaluate_DEC(triple_t* g1, mount_state_t* mstate) {
 void init_drive() {
 	enableMPU();
 	stepper1.enableOutputs();
-	while (!loopMPU(false)) { // wait for MPU interrupt
-		loop();
-	}
+	setCurrentGravity(&current_g);
 	evaluate_RA(&current_g, &current_mstate);
 	//disableMPU();
-	printf("RA_isLeft=%s\nRA_speed=", current_mstate.RA_isLeft ? "yes" : "no");
+	printf("RA_isLeft=%s RA_speed=", current_mstate.RA_isLeft ? "yes" : "no");
 	println(current_mstate.RA_speed, 6);
 
 	stepper2.enableOutputs();
 	evaluate_DEC(&current_g, &current_mstate);
-	printf("DEC_isLeft=%s\nDEC_speed=", current_mstate.DEC_isLeft ? "yes" : "no");
+	printf("DEC_isLeft=%s DEC_speed=", current_mstate.DEC_isLeft ? "yes" : "no");
 	println(current_mstate.DEC_speed, 6);
 
-	print("Gravity\t");
-	print(current_g.x, 6);
-	print("\t");
-	print(current_g.y, 6);
-	print("\t");
-	println(current_g.z, 6);
+	printGravity(current_g);
+}
+
+void waitForUser(String msg) {
+	// wait for ready
+	if (msg.length() > 0) {
+		println(msg);
+	} else {
+		println(F("Send any character to begin fine tuning..."));
+	}
+	while (Serial.available() && Serial.read() || Serial1.available() && Serial1.read())
+		; // empty buffer
+	while (!Serial.available() && !Serial1.available())
+		; // wait for data
+	while (Serial.available() && Serial.read() || Serial1.available() && Serial1.read())
+		; // empty buffer again
 }
 
 void setup() {
@@ -508,9 +509,9 @@ void setup() {
 	printf("maxSPS=%1d", maxSPS);
 }
 
-void runCommand() {
+bool runCommand() {
+	bool isCommand = true;
 	if (inputString == "1") {
-		i = 0;
 		printf("switched to stepper 1");
 
 	} else if (inputString == "2") {
@@ -580,19 +581,15 @@ void runCommand() {
 		printf("motor %1d disabled.\n", i);
 
 	} else if (inputString == "q" && getMPULock()) {
-		int c = 0;
 		enableMPU();
-		while (!loopMPU(true)) { // wait for MPU interrupt
-			loop();
-			c++;
-		}
+		setCurrentGravity(&current_g);
 		disableMPU();
-		triple_t gravity = getGravity();
-		print("Z angle=");
-		print(degrees(acos(gravity.z)), 4);
+		printGravity(current_g);
+		print("Z_angle=");
+		print(degrees(atan(current_g.z / current_g.y)), 4);
 		print("\t");
-		print("X angle=");
-		println(degrees(atan(gravity.x / gravity.y)), 4);
+		print(" X_angle=");
+		println(degrees(atan(current_g.x / current_g.y)), 4);
 
 	} else if (inputString == "w") {
 		stepper2.move(8);
@@ -620,11 +617,7 @@ void runCommand() {
 		cancelAll = false;
 
 		enableMPU();
-		while (!loopMPU(false)) { // wait for MPU interrupt
-			loop();
-		}
-		//disableMPU();
-		current_g = getGravity();
+		setCurrentGravity(&current_g);
 		print("\nGravity\t");
 		print(current_g.x, 6);
 		print("\t");
@@ -637,12 +630,16 @@ void runCommand() {
 
 		RA_done = DEC_done = false;
 
-		triple_t target = { 0.77, 0.36, 0.51 };
+		triple_t target = { current_g.x, current_g.y, current_g.z };
 
 		if (RA_limit(target, RA_dir, mstate)) { // check if target is reachable
 			cancelAll = true;
 			println("Target not reachable.");
 		}
+
+		waitForUser("Move the RA and DEC away from home positions.");
+
+		setCurrentGravity(&current_g);
 
 		bool RA_sameTilt = (target.y < 0) == mstate.RA_isLeft; // is the target tilt the same as current RA tilt?
 
@@ -668,30 +665,12 @@ void runCommand() {
 		getGravity(&current_g);
 		printGravity(current_g);
 
-		// wait for ready
-		println(F("Send any character to begin fine tuning..."));
-		while (Serial.available() && Serial.read() || Serial1.available() && Serial1.read())
-			; // empty buffer
-		while (!Serial.available() && !Serial1.available())
-			; // wait for data
-		while (Serial.available() && Serial.read() || Serial1.available() && Serial1.read())
-			; // empty buffer again
+		waitForUser("");
 
 		triple_t g1;
-		int n = 0;
 		while (moveToTarget(&current_g, &target) && !cancelAll) {
-			while (n-- > 0) {
-				loop();
-			}
-			n = 300;
-			while (!loopMPU(false) && n > 0) {
-				loop();
-				n--;
-			}
-			g1.x = current_g.x;
-			g1.y = current_g.y;
-			g1.z = current_g.z;
-			getGravity(&current_g);
+			getGravity(&g1); // get the old values
+			setCurrentGravity(&current_g, true); // update the values
 			update_RA_state(&g1, &current_g, &current_mstate, RA_dir);
 			update_DEC_state(&g1, &current_g, &current_mstate, DEC_dir);
 			//delay(600);
@@ -711,8 +690,10 @@ void runCommand() {
 
 	} else if (inputString == "i") {
 		init_drive();
+	} else {
+		isCommand = false;
 	}
-
+	return isCommand;
 }
 
 void loop() {
@@ -724,12 +705,14 @@ void loop() {
 			char inChar = (char) Serial1.read(); //read the input
 			inputString += inChar; //make a string of the characters coming on serial1
 		}
-		println(inputString);
+
 		while (Serial.available() > 0) {
 			junk = Serial.read();
 		} // clear the serial buffer
 
-		runCommand();
+		if (!runCommand()) {
+			println(inputString);
+		}
 		inputString = "";
 	}
 
@@ -738,13 +721,14 @@ void loop() {
 			char inChar = (char) Serial.read(); //read the input
 			inputString += inChar; //make a string of the characters coming on serial
 		}
-		println(inputString);
 
 		while (Serial.available() > 0) {
 			junk = Serial.read();
 		} // clear the serial buffer
 
-		runCommand();
+		if (!runCommand()) {
+			println(inputString);
+		}
 		inputString = "";
 	}
 	stepper1.run();
