@@ -145,7 +145,7 @@ void setCurrentGravity(triple_t* mytriple, bool normalizeDelay) {
 		loop();
 		n--;
 	}
-	printGravity(*mytriple);
+//	printGravity(*mytriple);
 	getGravity(mytriple);
 	while (n-- > 0 && normalizeDelay) {
 		loop();

@@ -5,8 +5,11 @@ struct triple_t {
 	float x;
 	float y;
 	float z;
-} ;
-
+	bool leftRA; // will RA tilt left for the target? it must be given by client.
+	bool RA_sameTilt(bool RA_isLeft) {
+		return leftRA == RA_isLeft; // is the target tilt the same as current RA tilt?
+	}
+};
 
 void enableMPU();
 void disableMPU();

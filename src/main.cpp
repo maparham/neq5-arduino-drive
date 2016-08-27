@@ -92,9 +92,9 @@ void setSpeed(int i, long _sps) {
 	steppers[i]->setMaxSpeed(_sps);
 }
 
-long getDistance_RA(triple_t g1, triple_t g2, mount_state_t mstate, bool RA_sameSide) {
+long getDistance_RA(triple_t g1, triple_t g2, mount_state_t mstate) {
 	long result;
-	if (RA_sameSide) {
+	if (g2.RA_sameTilt(mstate.RA_isLeft)) {
 		result = abs(acos(g2.z)-acos(g1.z)) / mstate.RA_speed;
 	} else {
 		println(abs(acos(g2.z) + acos(g1.z)) / mstate.RA_speed, 6);
@@ -106,19 +106,19 @@ long getDistance_RA(triple_t g1, triple_t g2, mount_state_t mstate, bool RA_same
 	return result;
 }
 
-long getDistance_DEC(triple_t g1, triple_t g2, mount_state_t mstate, bool RA_sameSide, int dir) {
+long getDistance_DEC(triple_t g1, triple_t g2, mount_state_t mstate, int dir) {
 	float angularDist = 0;
 	double regions[8] = { 0, -HALF_PI, HALF_PI, 0, 0, -HALF_PI, HALF_PI, 0 }; // observed when RA is tilted to left
 	int begin = -1, end = -1; // the start and end regions
 	float x1 = g1.x, y1 = g1.y, x2 = g2.x, y2 = g2.y, phi1, phi2;
-
+	bool RA_sameTilt = g2.RA_sameTilt(mstate.RA_isLeft);
 	// flip signs as if RA is left tilted (to be able to use the following rules)
 	if (!mstate.RA_isLeft) {
 		println("RA not left tilted, negating x1 and y1");
 		x1 = -x1;
 		y1 = -y1;
 	}
-	if (!mstate.RA_isLeft && RA_sameSide || mstate.RA_isLeft && !RA_sameSide) { // if the target orientation is right tilted
+	if (!mstate.RA_isLeft && RA_sameTilt || mstate.RA_isLeft && !RA_sameTilt) { // if the target orientation is right tilted
 		println("target not left tilted, negating x2 and y2");
 		x2 = -x2;
 		y2 = -y2;
@@ -147,25 +147,18 @@ long getDistance_DEC(triple_t g1, triple_t g2, mount_state_t mstate, bool RA_sam
 	phi1 = atan(g1.x / g1.y);
 	phi2 = atan(g2.x / g2.y);
 
-	printf("begin=%d end=%d\n", begin, end);
-	println(phi1);
-	println(phi2);
+	/*printf("begin=%d end=%d\n", begin, end);
+	 println(phi1);
+	 println(phi2);*/
 
 	if (begin == end) {
 		angularDist += abs(phi1 - phi2);
-		print("angularDist0=");
-		println(angularDist);
 	} else {
 		if (dir == CW) { // distance to the end of each region
 			angularDist += abs(regions[begin + 1] - phi1);
 			angularDist += abs(regions[end] - phi2);
-			print("angularDist1=");
-			println(angularDist);
 
 		} else { // distance to the start of each region
-			print("angularDist2=");
-			println(angularDist);
-
 			angularDist += abs(regions[begin] - phi1);
 			angularDist += abs(regions[end + 1] - phi2);
 		}
@@ -201,7 +194,7 @@ bool DEC_limit(triple_t gravity, int DEC_dir) {
 int RA_dir = 0, DEC_dir = 0;
 void calcDirections(triple_t* target) {
 	mount_state_t mstate = current_mstate;
-	bool RA_sameTilt = (target->y < 0) == mstate.RA_isLeft; // is the target tilt the same as current RA tilt?
+	bool RA_sameTilt = target->RA_sameTilt(mstate.RA_isLeft);
 
 	// find out relative directions for reaching the target tilt and heading
 	RA_dir = (mstate.RA_isLeft ? 1 : -1) * ((target->z < current_g.z) && RA_sameTilt ? -1 : 1);
@@ -217,19 +210,32 @@ void calcDirections(triple_t* target) {
 			|| (mstate.RA_isLeft && !mstate.DEC_isLeft && current_g.x < 0);
 
 	float currentX = current_g.x * (RA_sameTilt ? 1 : -1); // g.x, after RA transition
-	/*
-	 printf(
-	 "DEC_willBeLeft=%d RA_willBeLeft=%d DEC_sameTilt=%d RA_sameTilt=%d headingBackRight=%d headingBackLeft=%d headingBackward=%d currentXY=",
-	 DEC_willBeLeft, RA_willBeLeft, DEC_sameTilt, RA_sameTilt, headingBackRight,
-	 headingBackLeft, headingBackward);
-	 */
+
+/*
+	printf(
+			"mstate.RA_isLeft=%d mstate.DEC_isLeft=%d DEC_willBeLeft=%d RA_willBeLeft=%d "
+					"DEC_sameTilt=%d RA_sameTilt=%d headingBackRight=%d headingBackLeft=%d headingBackward=%d currentXY=",
+			mstate.RA_isLeft, mstate.DEC_isLeft, DEC_willBeLeft, RA_willBeLeft, DEC_sameTilt,
+			RA_sameTilt, headingBackRight, headingBackLeft, headingBackward);
+*/
+
 	println(currentX, 6);
 	println(current_g.y, 6);
 
 	DEC_dir = ((RA_willBeLeft && !headingBackRight) ? 1 : -1)
 			* ((!RA_willBeLeft && headingBackLeft) ? -1 : 1) // when headingBackLeft, counter the previous -1 (because CCW is not desired here)
 			* (((target->x < currentX) && !headingBackward && DEC_sameTilt) ? -1 : 1) // if the head points within the front circle (on the xy-plane)
-			* (((target->x > currentX) && headingBackward && DEC_sameTilt) ? -1 : 1); // if the head points within the back circle (on the xy-plane)
+			* (((target->x < currentX) && headingBackward && DEC_sameTilt) ? 1 : -1); // if the head points within the back circle (on the xy-plane)
+
+	DEC_dir = (RA_willBeLeft ? 1 : -1) * ((target->x < currentX) && DEC_sameTilt ? -1 : 1)
+			* (headingBackward ? -1 : 1);
+
+	if (!DEC_sameTilt && headingBackLeft) {
+		DEC_dir = CW;
+	}
+	if (!DEC_sameTilt && headingBackRight) {
+		DEC_dir = CCW;
+	}
 
 	//printf("DEC_dir=%s RA_dir=%s\n", (DEC_dir == CW) ? "CW" : "CCW", (RA_dir == CW) ? "CW" : "CCW");
 
@@ -286,7 +292,7 @@ bool moveToTarget(triple_t* gravity, triple_t* target) {
 			xCounter = ERROR_LIMIT; // give it enough time for changing direction
 		}
 		//DEC_done = false;
-		setSpeed(1, max(min(8000, 50000 * abs(deltaX)), 100));
+		setSpeed(1, max(50000 * abs(deltaX), 80));
 		stepper2.move(DEC_dir * max(20000 * abs(deltaX), 1000));
 
 	}
@@ -368,9 +374,7 @@ void evaluate_RA(triple_t* g1, mount_state_t* mstate) {
 	for (int i = 0; i < 2; i++) {
 		direction = (i % 2 ? CW : CCW);
 		stepper1.move(direction * TEST_STEPS / 2);
-		while (stepper1.run()) {
-			loop();
-		}
+		stepper1.runToPosition();
 		setCurrentGravity(&g2);
 		update_RA_state(g1, &g2, mstate, direction);
 		mstate->RA_speed = min(mstate->RA_speed, abs(acos(g2.z)-acos(g1->z)) / TEST_STEPS * 2);
@@ -399,6 +403,7 @@ void evaluate_DEC(triple_t* g1, mount_state_t* mstate) {
 	for (int i = 0; i < 2; i++) {
 		direction = (i % 2 ? CW : CCW);
 		stepper2.move(direction * TEST_STEPS / 2);
+		stepper2.runToPosition();
 		setCurrentGravity(&g2);
 		update_DEC_state(g1, &g2, mstate, direction);
 		mstate->DEC_speed = min(mstate->DEC_speed,
@@ -410,14 +415,14 @@ void evaluate_DEC(triple_t* g1, mount_state_t* mstate) {
 			mstate->DEC_speed = 0.000055;
 		}
 	}
-	/*
-	 i = 4;
-	 while (mstate->DEC_speed <= 0.00001 && i-- > 0 && !cancelAll) { // if it failed then try again
-	 print("incorrect DEC_speed: ");
-	 println(mstate->DEC_speed, 10);
-	 evaluate_DEC(g1, mstate);
-	 }
-	 */
+
+	i = 1;
+	while (mstate->DEC_speed <= 0.00001 && i-- > 0 && !cancelAll) { // if it failed then try again
+		print("incorrect DEC_speed: ");
+		println(mstate->DEC_speed, 6);
+		evaluate_DEC(g1, mstate);
+	}
+	mstate->DEC_speed = 0.000055;
 }
 
 void init_drive() {
@@ -433,8 +438,7 @@ void init_drive() {
 	evaluate_DEC(&current_g, &current_mstate);
 	printf("DEC_isLeft=%s DEC_speed=", current_mstate.DEC_isLeft ? "yes" : "no");
 	println(current_mstate.DEC_speed, 6);
-
-	printGravity(current_g);
+	//printGravity(current_g);
 }
 
 void waitForUser(String msg) {
@@ -510,6 +514,7 @@ void setup() {
 }
 
 bool runCommand() {
+	cancelAll = false;
 	bool isCommand = true;
 	if (inputString == "1") {
 		printf("switched to stepper 1");
@@ -614,60 +619,58 @@ bool runCommand() {
 	} else if (inputString == "p" && getMPULock()) {
 		stepper1.enableOutputs();
 		stepper2.enableOutputs();
-		cancelAll = false;
 
 		enableMPU();
-		setCurrentGravity(&current_g);
-		print("\nGravity\t");
-		print(current_g.x, 6);
-		print("\t");
-		print(current_g.y, 6);
-		print("\t");
-		println(current_g.z, 6);
-
 		init_drive();
-		mount_state_t mstate = current_mstate;
+		mount_state_t* mstate = &current_mstate;
 
 		RA_done = DEC_done = false;
 
-		triple_t target = { current_g.x, current_g.y, current_g.z };
+		triple_t target;
+		setCurrentGravity(&target);
+		target.leftRA = false;
+		printGravity(target);
 
-		if (RA_limit(target, RA_dir, mstate)) { // check if target is reachable
+		if (RA_limit(target, RA_dir, *mstate)) { // check if target is reachable
 			cancelAll = true;
 			println("Target not reachable.");
 		}
 
-		waitForUser("Move the RA and DEC away from home positions.");
-
+		waitForUser("Move the RA and DEC away from home positions then press any key.");
+		init_drive(); // update mount state
 		setCurrentGravity(&current_g);
-
-		bool RA_sameTilt = (target.y < 0) == mstate.RA_isLeft; // is the target tilt the same as current RA tilt?
 
 		calcDirections(&target);
 
-		stepper1.move(RA_dir * (getDistance_RA(current_g, target, mstate, RA_sameTilt) * 0.9));
+		stepper1.move(RA_dir * (getDistance_RA(current_g, target, *mstate) * 0.9));
 		printf("DEC_dir=%s RA_dir=%s\n", (DEC_dir == CW) ? "CW" : "CCW",
 				(RA_dir == CW) ? "CW" : "CCW");
 		print("stepper1.move=");
-		println(getDistance_RA(current_g, target, mstate, RA_sameTilt));
+		println(getDistance_RA(current_g, target, *mstate));
 
-		stepper2.move(
-				DEC_dir * (getDistance_DEC(current_g, target, mstate, RA_sameTilt, DEC_dir) * 0.9));
+		stepper2.move(DEC_dir * (getDistance_DEC(current_g, target, *mstate, DEC_dir) * 0.9));
 		print("stepper2.move=");
-		println(getDistance_DEC(current_g, target, mstate, RA_sameTilt, DEC_dir));
+		println(getDistance_DEC(current_g, target, *mstate, DEC_dir));
 
 		setSpeed(0, 7000);
 		setSpeed(1, 7000);
+		triple_t g1;
 		while ((stepper1.run() || stepper2.run() || !loopMPU(false)) && !cancelAll) {
 			loop();
+			setCurrentGravity(&current_g, true);
+			update_RA_state(&g1, &current_g, &current_mstate, RA_dir);
+			update_DEC_state(&g1, &current_g, &current_mstate, DEC_dir);
+
 		}
 
-		getGravity(&current_g);
 		printGravity(current_g);
+
+		calcDirections(&target); // we could have passed target slightly, therefore re-calculate directions
+		printf("DEC_dir1=%s RA_dir1=%s\n", (DEC_dir == CW) ? "CW" : "CCW",
+				(RA_dir == CW) ? "CW" : "CCW");
 
 		waitForUser("");
 
-		triple_t g1;
 		while (moveToTarget(&current_g, &target) && !cancelAll) {
 			getGravity(&g1); // get the old values
 			setCurrentGravity(&current_g, true); // update the values
@@ -676,8 +679,15 @@ bool runCommand() {
 			//delay(600);
 		}
 		disableMPU();
-		printGravity(current_g);
-		cancelAll = false;
+		printGravity(target, "target: ");
+		printGravity(current_g, "current: ");
+		print("errors=");
+		print(target.x - current_g.x, 6);
+		print(" ");
+		print(target.y - current_g.y, 6);
+		print(" ");
+		print(target.z - current_g.z, 6);
+
 		stepper1.stop();
 		stepper2.stop();
 

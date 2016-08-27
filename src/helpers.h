@@ -17,5 +17,6 @@ size_t print(const String &s);
 size_t println(const char c[]);
 size_t print(const char c[]);
 void printGravity(triple_t gravity);
+void printGravity(triple_t gravity, String msg);
 
 #endif

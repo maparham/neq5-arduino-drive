@@ -53,10 +53,16 @@ size_t print(const char c[]) {
 }
 
 void printGravity(triple_t gravity) {
-	print("\nGravity\t");
+	print("Gravity= ");
 	print(gravity.x, 6);
-	print("\t");
+	print("  ");
 	print(gravity.y, 6);
-	print("\t");
+	print("  ");
 	println(gravity.z, 6);
+}
+void printGravity(triple_t gravity, String msg) {
+	if (msg.length() > 0) {
+		print(msg);
+	}
+	printGravity(gravity);
 }
