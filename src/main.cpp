@@ -4,8 +4,7 @@
 
 char junk;
 String inputString = "";
-static FILE uartout = { 0 };
-
+static FILE uartout = {0};
 // Function that printf and related will use to print
 int serial_putchar(char c, FILE* f) {
 	if (c == '\n')
@@ -24,10 +23,10 @@ triple_t current_g;
 
 int dir[2], stepModes[6] = { 1, 2, 4, 8, 16, 32 }, sm = 0, decelerating[2];
 long sps[2];
-const int ENABLE1 = 23, M10 = 25, M11 = 27, M12 = 29, RESET1 = 31, SLEEP1 = 33,
-		STEP1 = 35, DIR1 = 37;
-const int ENABLE2 = 39, M20 = 41, M21 = 43, M22 = 45, RESET2 = 47, SLEEP2 = 49,
-		STEP2 = 51, DIR2 = 53;
+const int ENABLE1 = 23, M10 = 25, M11 = 27, M12 = 29, RESET1 = 31, SLEEP1 = 33, STEP1 = 35, DIR1 =
+		37;
+const int ENABLE2 = 39, M20 = 41, M21 = 43, M22 = 45, RESET2 = 47, SLEEP2 = 49, STEP2 = 51, DIR2 =
+		53;
 
 const long DISTANCE = 10000000, ACCEL = 500;
 const int CW = 1, CCW = -1;
@@ -91,13 +90,6 @@ void setSPS(int i, long _sps) {
 	sps[i] = _sps;
 	steppers[i]->setAcceleration(3 * _sps);
 	steppers[i]->setMaxSpeed(_sps);
-}
-void setRPM(int i, long rpm) {
-	if (rpm < 0)
-		rpm = 1;
-	if (rpm > maxSPS)
-		rpm = maxSPS;
-stepModes[i]=;
 }
 
 long getDistance_RA(const triple_t& g1, const triple_t& g2,
@@ -287,6 +279,7 @@ float lastDeltaZ = 2, lastDeltaX = 2;
 #define ERROR_LIMIT 7
 #define X_ERROR  0.0005
 #define Z_ERROR  X_ERROR
+
 #define DELTA_X_ERROR  0.0001 // maximum acceptable deviation to a wrong direction
 #define DELTA_Z_ERROR  DELTA_X_ERROR
 long xCounter = ERROR_LIMIT, zCounter = ERROR_LIMIT;

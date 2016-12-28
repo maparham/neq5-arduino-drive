@@ -61,7 +61,7 @@ void printGravity(triple_t gravity) {
 	print(gravity.z, 6);
 	print("  ");
 	print("YPR ");
-	print(gravity.ya, 6);
+	print(gravity.y, 6);
 	print(" ");
 	print(gravity.p, 6);
 	print(" ");

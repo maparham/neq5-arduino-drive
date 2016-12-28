@@ -93,7 +93,6 @@ float ypr[3]; // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vecto
 // packet structure for InvenSense teapot demo
 uint8_t teapotPacket[14] = { '$', 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0x00, 0x00,
 		'\r', '\n' };
-
 // ================================================================
 // ===               INTERRUPT DETECTION ROUTINE                ===
 // ================================================================
